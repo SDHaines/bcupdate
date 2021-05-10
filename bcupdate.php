@@ -1,9 +1,8 @@
 #!/usr/local/bin/php
 <?php
 require_once '/usr/local/valCommon/BigComm.php';
-#require_once '/usr/local/valCommon/SqlServer.php';
 require_once '/usr/local/valCommon/Counterpoint.php';
-#$conn = vcSqlServerConnect( $vcSqlServerWriterConnectionOptions );
+
 $ignoredItemList = "'10001', '10024', '10025','AGE_VERIFY','CLEAR_DL_DATA',
 'CUST_ADD','LOTTO','LOTTO P/O','MISC','MO FEE','MONEYXFER',
 'SCRATCHER P/O','SWIPE_DL','TEMPLATE'";
@@ -30,25 +29,21 @@ AND STAT = 'A'
 AND ITEM_NO NOT IN ( $ignoredItemList )
 ";
 
-#$stmt = vcSqlServerQuery( $conn, $tsql, "vcSqlServerQuery failed execution can not continue\n" );
 $data = counterpointQuickQuery( $tsql );
 
 if ( $data === null or $data === false ){ die ( "Can't query database for item list\n" ); }
 foreach( $data as $row ) {
-
-# while ( $row = sqlsrv_fetch_array( $stmt, SQLSRV_FETCH_ASSOC ) ) {
-  #printf ( "row: %04d sku: %05d name: %-80s id: %04d\n", $rowCount, $row['sku'],$row['name'],$row['id']);
 
   $qtyAvail = (int) $row['inventory_level'];
   if ( $qtyAvail < 0 ) { $qtyAvail = 0; }
   $row['price'] = sprintf (" %.02f", $row['price'] );
 
   if ( isset( $row['id'] ) ) {
-    #print "adding " . $row['name'] . " to oldItems\n";
+    
     $oldItems[$row['sku']] = array ( 'id' => $row['id'], 'name' => $row['name'], 'inventory_level' => $qtyAvail, 'description' => $row['name'],
                                      'price' =>  $row['price'], 'cost_price' => $row['price'] );
   } else {
-     #print "adding " . $row['name'] . " to newItems\n";
+     
      $newItems[$row['sku']] = ( object ) array ( 'name' => $row['name'], 'type' => 'physical', 'sku' => $row['sku'], 
                         'description' => $row['name'], 'weight' => '1', 'price' =>  $row['price'],
                         'cost_price' => $row['price'], 'tax_class_id' => $row['tax_class_id'], 
@@ -74,11 +69,8 @@ while ( $nextPage ){
           if ($p->inventory_level != $currInventory or $p->price != $currPrice ) {
             $updateItems[] = $oldItems[$p->sku];
             $oldBcInfo[$p->sku] = $p;
-            #print "UPD: OLIL: $p->inventory_level DBIL: $currInventory OLP: $p->price DBP: $currPrice\n";
           }
-          #else {
-          #  print "nUPD: nOLIL: $p->inventory_level nDBIL: $currInventory nOLP: $p->price nDBP: $currPrice\n";
-          #}
+
        }
     } else {
         print_r( $response );
@@ -88,15 +80,10 @@ $itemCount = count( $updateItems );
 print "################### update ###################\n";
 printf ( "%3d item%s need%s to be updated\n", $itemCount, $itemCount == 1 ? "" : "s", $itemCount == 1 ? "s" : "" );
 while ( $update10 = array_splice ( $updateItems, 0, 10 ) ) {
-  #foreach ( $update10 as $item ) { #force single item update for debugging
-    #$data = json_encode( $item );
-    $data = json_encode( $update10 ); #force single item update for debugging
+    $data = json_encode( $update10 ); 
     $response = vcCurl( "PUT", $vcBigCommProductUrl, $vcBigCommCurlHeaders, $data );
-    #print "STATUS: $response->responseCode\n";
+    
     if ( $response->responseCode == 200 ) {
-      
-      #print_r ( $response );
-      
       $d = $response->body->data;
       $count = count( $d );
       for ( $i = 0; $i < $count; $i++ ) {
@@ -116,9 +103,7 @@ while ( $update10 = array_splice ( $updateItems, 0, 10 ) ) {
       print_r( $response );
       print_r( $update10 );
       print "******************* Items not updated *******************\n\n";
-      #exit;
     }
-  #} #force single item update for debugging
 }
 print "################### update ###################\n\n";
 
@@ -137,21 +122,22 @@ foreach ( $newItems as $item ) {
       $bcItemNo = $response->body->data->id;
       $sku = $response->body->data->sku;
       $tsql = "UPDATE IM_ITEM SET BC_ITEM_NO = '$bcItemNo' WHERE ITEM_NO = '$sku'";
-      #$stmt = vcSqlServerQuery( $conn, $tsql, "vcSqlServerQuery failed execution can not continue\n" );
       $dummy = null;
       $result = counterpointQuickQuery( $tsql, $dummy, $dummy, true, true );
-      print "cell BC_ITEM_NO for IM_ITEM.ITEM_NO $sku has been updated with value $bcItemNo\n";
+      if ( $result == 1 )
+      { 
+        print "cell BC_ITEM_NO for IM_ITEM.ITEM_NO $sku has been updated with value $bcItemNo\n"; 
+      } else { 
+        print "unexpected result: $result updating cell BC_ITEM_NO for IM_ITEM.ITEM_NO $sku with value $bcItemNo\n"; 
+      }
     } else {
-      print "******************* Big Commerce not updated *******************\n";
+      print "******************* Big Commerce item not added *******************\n";
       print_r( $response );
       print_r( $item );
-      print "******************* Big Commerce not updated *******************\n";
-      #vcSqlServerCleanUp( $conn, $stmt );
+      print "******************* Big Commerce item not added *******************\n";
     }
   }
   print "#*#*#*#*#*#*#*#*#*# add new #*#*#*#*#*#*#*#*#*#\n\n";
-  #vcSqlServerCleanUp( $conn, $stmt );
-  
   exit;
 
 ?>
